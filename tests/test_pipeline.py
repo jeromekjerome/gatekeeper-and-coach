@@ -359,3 +359,64 @@ def test_model_failover_chain_and_health_probe():
     assert "drafting_chain" in health
     assert "evaluation_chain" in health
     assert health["drafting_chain"]["active"] == "gemini-2.5-flash"
+
+
+def test_eval_suite_cache_and_dry_run(tmp_path=None):
+    from pathlib import Path
+    import tempfile
+    from run_eval_suite import compute_scenario_cache_key, run_suite
+    from backend.retry_router import resolve_rubric_by_domain
+
+    _, finra_rubric = resolve_rubric_by_domain("finra_wealth_advisory")
+    k1 = compute_scenario_cache_key(
+        "finra_wealth_advisory", "Notes A", "Prompt A", "gemini-2.5-flash", finra_rubric
+    )
+    k2 = compute_scenario_cache_key(
+        "finra_wealth_advisory", "Notes A", "Prompt A", "gemini-2.5-flash", finra_rubric
+    )
+    assert k1 == k2
+
+    # Mutating the rubric must automatically invalidate the SHA-256 cache key
+    mutated_rubric = dict(finra_rubric)
+    mutated_rubric["max_auto_retries"] = 99
+    k3 = compute_scenario_cache_key(
+        "finra_wealth_advisory",
+        "Notes A",
+        "Prompt A",
+        "gemini-2.5-flash",
+        mutated_rubric,
+    )
+    assert k1 != k3
+
+    base_dir = Path(__file__).resolve().parent.parent
+    scenarios_path = base_dir / "sample_scenarios" / "demo_scenarios.json"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_p = Path(tmpdir)
+        out_file = tmp_p / "eval_results.json"
+        cache_file = tmp_p / ".eval_cache.json"
+
+        # First run: executes and populates SHA-256 cache
+        report_1 = run_suite(
+            input_path=scenarios_path,
+            output_path=out_file,
+            cache_path=cache_file,
+            concurrency=2,
+            dry_run=True,
+            no_cache=False,
+        )
+        assert report_1["suite_summary"]["total_scenarios"] == 2
+        assert report_1["suite_summary"]["all_invariants_passed"] is True
+        assert report_1["suite_summary"]["cache_hits"] == 0
+
+        # Second run: 100% cache hits
+        report_2 = run_suite(
+            input_path=scenarios_path,
+            output_path=out_file,
+            cache_path=cache_file,
+            concurrency=2,
+            dry_run=True,
+            no_cache=False,
+        )
+        assert report_2["suite_summary"]["cache_hits"] == 2
+        assert report_2["suite_summary"]["all_invariants_passed"] is True

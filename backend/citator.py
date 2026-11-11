@@ -233,7 +233,7 @@ def apply_deterministic_citation_gate(
     report: EvaluationReport,
     draft_text: str,
     source_notes: str,
-    rubric: dict,
+    rubric: Optional[dict] = None,
 ) -> EvaluationReport:
     """
     Integrates the deterministic citation verifier with the evaluation report:
@@ -243,13 +243,20 @@ def apply_deterministic_citation_gate(
        courtlistener_status == 'NOT_FOUND_404', deterministically forces PROH-LEG-01
        to violated = True and sets gate_status = 'BLOCKED'.
     """
-    prohibited_ids = {
-        item.get("id") for item in (rubric.get("prohibited_criteria") or [])
-    }
-    if (
-        "PROH-LEG-01" not in prohibited_ids
-        and rubric.get("domain_id") != "ny_litigation_drafting"
-    ):
+    if rubric is not None:
+        prohibited_ids = {
+            item.get("id") for item in (rubric.get("prohibited_criteria") or [])
+        }
+        is_legal_domain = (
+            "PROH-LEG-01" in prohibited_ids
+            or rubric.get("domain_id") == "ny_litigation_drafting"
+        )
+    else:
+        is_legal_domain = any(
+            c.id == "PROH-LEG-01" for c in (report.prohibited_checks or [])
+        )
+
+    if not is_legal_domain:
         return report
 
     citation_items = audit_draft_citations(
@@ -304,3 +311,6 @@ def apply_deterministic_citation_gate(
 
     report.gate_status = "BLOCKED"
     return report
+
+
+enforce_deterministic_citation_gate = apply_deterministic_citation_gate

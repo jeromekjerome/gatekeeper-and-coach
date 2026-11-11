@@ -12,3 +12,7 @@ venv/
 env/
 .pytest_cache/
 .coverage
+
+# Evaluation harness cache & local output
+tests/.eval_cache.json
+tests/eval_results.json

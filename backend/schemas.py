@@ -2,6 +2,23 @@ from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 
 
+class CitationAuditItem(BaseModel):
+    citation_text: str = Field(
+        description="Extracted case or reporter citation from the draft."
+    )
+    status: Literal["ANCHORED", "PLACEHOLDER_FLAGGED", "UNANCHORED"] = Field(
+        description="Whether the citation is anchored in source_notes, flagged with placeholder, or unanchored."
+    )
+    courtlistener_status: Literal["VERIFIED", "NOT_FOUND_404", "UNCHECKED"] = Field(
+        default="UNCHECKED",
+        description="Live CourtListener citation-lookup status when COURTLISTENER_TOKEN is configured.",
+    )
+    courtlistener_url: Optional[str] = Field(
+        default=None,
+        description="Canonical CourtListener URL when verified.",
+    )
+
+
 class RequiredCheckResult(BaseModel):
     id: str = Field(description="Rule ID from the JSON rubric, e.g., REQ-FIN-01")
     name: str
@@ -41,6 +58,10 @@ class EvaluationReport(BaseModel):
     required_checks: List[RequiredCheckResult]
     prohibited_checks: List[ProhibitedCheckResult]
     enablement_coaching: EnablementCoaching
+    citation_audit: List[CitationAuditItem] = Field(
+        default_factory=list,
+        description="Deterministic citation audit trail populated by backend/citator.py.",
+    )
 
 
 class AttemptRecord(BaseModel):
@@ -56,10 +77,16 @@ class PipelineResponse(BaseModel):
 
 
 class PipelineRequest(BaseModel):
-    domain_id: str = Field(description="Target domain ID matching a rubric in backend/rubrics/*.json")
-    source_notes: str = Field(description="Ground-truth source notes or legal record packet")
-    practitioner_prompt: str = Field(description="The practitioner's prompt instructing the model")
+    domain_id: str = Field(
+        description="Target domain ID matching a rubric in backend/rubrics/*.json"
+    )
+    source_notes: str = Field(
+        description="Ground-truth source notes or legal record packet"
+    )
+    practitioner_prompt: str = Field(
+        description="The practitioner's prompt instructing the model"
+    )
     model_id: Optional[str] = Field(
         default="gemini-2.5-flash",
-        description="Selected model ID (e.g., gemini-2.5-flash, gemini-2.5-pro, claude-sonnet, gpt-4.1, o3-mini)"
+        description="Selected model ID (e.g., gemini-2.5-flash, gemini-2.5-pro, claude-sonnet, gpt-4.1, o3-mini)",
     )

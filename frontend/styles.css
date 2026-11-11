@@ -662,6 +662,92 @@ textarea {
   font-size: 0.74rem;
 }
 
+/* Deterministic Citation Audit Panel (citator.py) */
+.citation-audit-section {
+  background-color: rgba(15, 23, 42, 0.72);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem;
+}
+
+.citation-audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.citation-audit-header h4 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.citation-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.citation-audit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.78rem;
+}
+
+.citation-audit-row.cite-anchored {
+  border-left: 3px solid var(--success-border);
+}
+
+.citation-audit-row.cite-placeholder {
+  border-left: 3px solid var(--warning-border);
+}
+
+.citation-audit-row.cite-unanchored {
+  border-left: 3px solid var(--danger-border);
+  background-color: rgba(239, 68, 68, 0.09);
+}
+
+.citation-text-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.citation-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pill-warn {
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+}
+
+.pill-neutral {
+  background-color: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted);
+}
+
+.cl-link {
+  color: var(--accent-cyan);
+  text-decoration: underline;
+  font-weight: 700;
+}
+
 /* Coach Column */
 .coach-content {
   display: flex;

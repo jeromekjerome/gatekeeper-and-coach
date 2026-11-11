@@ -1,5 +1,6 @@
 import json
 from typing import Optional
+from backend.citator import apply_deterministic_citation_gate
 from backend.schemas import EvaluationReport
 from backend.model_adapter import generate_structured
 
@@ -10,6 +11,7 @@ def enforce_deterministic_gate(report: EvaluationReport) -> EvaluationReport:
     Regardless of how the LLM summarizes gate_status, verify in code that:
     1. Every required_check has passed == True.
     2. Every prohibited_check has violated == False.
+    3. No item in citation_audit has status == 'UNANCHORED' or courtlistener_status == 'NOT_FOUND_404'.
     If any single check fails, force gate_status = 'BLOCKED'.
     """
     all_required_passed = len(report.required_checks) > 0 and all(
@@ -18,8 +20,12 @@ def enforce_deterministic_gate(report: EvaluationReport) -> EvaluationReport:
     no_prohibited_violated = all(
         not check.violated for check in report.prohibited_checks
     )
+    no_unanchored_citations = all(
+        item.status != "UNANCHORED" and item.courtlistener_status != "NOT_FOUND_404"
+        for item in report.citation_audit
+    )
 
-    if all_required_passed and no_prohibited_violated:
+    if all_required_passed and no_prohibited_violated and no_unanchored_citations:
         report.gate_status = "PASSED"
     else:
         report.gate_status = "BLOCKED"
@@ -36,7 +42,8 @@ def evaluate_draft_and_coach(
 ) -> EvaluationReport:
     """
     Grades a generated draft against explicit Required and Prohibited JSON criteria
-    loaded dynamically from rubric_path, and generates enablement coaching for the
+    loaded dynamically from rubric_path, runs the deterministic legal citation & authority
+    verifier (backend/citator.py), and generates enablement coaching for the
     non-technical practitioner.
     """
     with open(rubric_path, "r", encoding="utf-8") as f:
@@ -48,6 +55,7 @@ def evaluate_draft_and_coach(
         "1. Grade the GENERATED DRAFT strictly against every rule in the REQUIRED CRITERIA and PROHIBITED CRITERIA from the JSON rubric. "
         "   - Be sure to return one RequiredCheckResult for every item in required_criteria (matching its exact id and name). "
         "   - Be sure to return one ProhibitedCheckResult for every item in prohibited_criteria (matching its exact id and name). "
+        "   - Leave citation_audit as an empty list []; it is populated deterministically by the Python citation parser. "
         "2. If ANY required criterion fails (passed=False) OR ANY prohibited criterion is violated (violated=True), "
         "you MUST set gate_status to 'BLOCKED'. Only set 'PASSED' if 100% of criteria pass. "
         "3. In enablement_coaching, speak directly to the non-technical practitioner: diagnose why their ORIGINAL PROMPT "
@@ -75,6 +83,14 @@ def evaluate_draft_and_coach(
         response_schema=EvaluationReport,
         model_id=model_id or "gemini-2.5-pro",
         temperature=0.1,
+    )
+
+    # Run Deterministic Legal Citation & Authority Verifier (overrides PROH-LEG-01 if unanchored)
+    report = apply_deterministic_citation_gate(
+        report=report,
+        draft_text=generated_draft,
+        source_notes=source_notes,
+        rubric=rubric,
     )
 
     return enforce_deterministic_gate(report)

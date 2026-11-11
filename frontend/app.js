@@ -349,6 +349,74 @@ function renderPipelineResults(pipelineData) {
       )
       .join("");
 
+    const citationItems = attempt.evaluation.citation_audit || [];
+    const citationSectionHtml =
+      citationItems.length > 0
+        ? `
+        <div class="citation-audit-section">
+          <div class="citation-audit-header">
+            <h4>&#9878; Deterministic Citation &amp; Authority Verifier (backend/citator.py)</h4>
+            <span class="check-status-pill ${
+              citationItems.some(
+                (c) => c.status === "UNANCHORED" || c.courtlistener_status === "NOT_FOUND_404"
+              )
+                ? "pill-fail"
+                : "pill-pass"
+            }">
+              ${
+                citationItems.filter((c) => c.status === "ANCHORED").length
+              }/${citationItems.length} Anchored in Record
+            </span>
+          </div>
+          <div class="citation-audit-list">
+            ${citationItems
+              .map((cite) => {
+                const rowClass =
+                  cite.status === "ANCHORED" && cite.courtlistener_status !== "NOT_FOUND_404"
+                    ? "cite-anchored"
+                    : cite.status === "PLACEHOLDER_FLAGGED" &&
+                      cite.courtlistener_status !== "NOT_FOUND_404"
+                    ? "cite-placeholder"
+                    : "cite-unanchored";
+
+                const statusPillClass =
+                  cite.status === "ANCHORED"
+                    ? "pill-pass"
+                    : cite.status === "PLACEHOLDER_FLAGGED"
+                    ? "pill-warn"
+                    : "pill-fail";
+
+                let clBadgeHtml = "";
+                if (cite.courtlistener_status === "VERIFIED") {
+                  clBadgeHtml = cite.courtlistener_url
+                    ? `<a href="${escapeHtml(
+                        cite.courtlistener_url
+                      )}" target="_blank" rel="noopener noreferrer" class="check-status-pill pill-pass cl-link">CourtListener: VERIFIED &#8599;</a>`
+                    : `<span class="check-status-pill pill-pass">CourtListener: VERIFIED</span>`;
+                } else if (cite.courtlistener_status === "NOT_FOUND_404") {
+                  clBadgeHtml = `<span class="check-status-pill pill-fail">CourtListener: 404 NOT FOUND</span>`;
+                } else {
+                  clBadgeHtml = `<span class="check-status-pill pill-neutral">CourtListener: UNCHECKED</span>`;
+                }
+
+                return `
+                  <div class="citation-audit-row ${rowClass}">
+                    <span class="citation-text-code">${escapeHtml(cite.citation_text)}</span>
+                    <div class="citation-badges">
+                      <span class="check-status-pill ${statusPillClass}">Record: ${escapeHtml(
+                  cite.status
+                )}</span>
+                      ${clBadgeHtml}
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+      `
+        : "";
+
     card.innerHTML = `
       <div class="attempt-card-header">
         <div class="attempt-title">
@@ -363,6 +431,8 @@ function renderPipelineResults(pipelineData) {
           <div class="draft-box-label">Generated Document Text (Attempt #${attempt.attempt_number})</div>
           <div class="draft-text-box">${escapeHtml(attempt.draft_text)}</div>
         </div>
+
+        ${citationSectionHtml}
 
         <div class="criteria-matrix">
           <div class="criteria-column">
@@ -462,11 +532,19 @@ function enforceStrictExportGate() {
     Array.isArray(latestAttempt.evaluation?.prohibited_checks) &&
     latestAttempt.evaluation.prohibited_checks.every((c) => c.violated === false);
 
+  const noUnanchoredCitations =
+    latestAttempt &&
+    Array.isArray(latestAttempt.evaluation?.citation_audit || []) &&
+    (latestAttempt.evaluation.citation_audit || []).every(
+      (c) => c.status !== "UNANCHORED" && c.courtlistener_status !== "NOT_FOUND_404"
+    );
+
   const isGatePassed =
     pipeline?.final_status === "PASSED" &&
     latestAttempt?.evaluation?.gate_status === "PASSED" &&
     allReqPassed &&
-    noProhViolated;
+    noProhViolated &&
+    noUnanchoredCitations;
 
   // Verify HITL checkboxes
   const totalCheckboxes = Object.keys(state.hitlCheckedMap).length;

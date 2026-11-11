@@ -1,0 +1,65 @@
+from pydantic import BaseModel, Field
+from typing import List, Literal, Optional
+
+
+class RequiredCheckResult(BaseModel):
+    id: str = Field(description="Rule ID from the JSON rubric, e.g., REQ-FIN-01")
+    name: str
+    passed: bool
+    evidence_or_gap: str = Field(
+        description="Exact quote proving compliance, or specific explanation of what is missing."
+    )
+
+
+class ProhibitedCheckResult(BaseModel):
+    id: str = Field(description="Rule ID from the JSON rubric, e.g., PROH-FIN-01")
+    name: str
+    violated: bool = Field(description="True if the draft violated this prohibition.")
+    offending_quote: str = Field(
+        description="Verbatim quote from the draft that violated the rule, or 'None' if clean."
+    )
+    remediation_instruction: str = Field(
+        description="Specific instruction for the retry loop to fix this violation."
+    )
+
+
+class EnablementCoaching(BaseModel):
+    prompt_quality_score: int = Field(ge=0, le=100)
+    why_your_prompt_caused_this: str = Field(
+        description="Plain-English explanation for a non-engineer (attorney or financial advisor) explaining how their prompt phrasing triggered model sycophancy, omission, or hallucination."
+    )
+    upgraded_prompt_template: str = Field(
+        description="A reusable, well-structured prompt the practitioner should use next time."
+    )
+    human_verification_checklist: List[str] = Field(
+        description="2 to 3 specific factual or regulatory items the human professional must verify before signing off."
+    )
+
+
+class EvaluationReport(BaseModel):
+    gate_status: Literal["PASSED", "BLOCKED"]
+    required_checks: List[RequiredCheckResult]
+    prohibited_checks: List[ProhibitedCheckResult]
+    enablement_coaching: EnablementCoaching
+
+
+class AttemptRecord(BaseModel):
+    attempt_number: int
+    draft_text: str
+    evaluation: EvaluationReport
+
+
+class PipelineResponse(BaseModel):
+    domain_id: str
+    final_status: Literal["PASSED", "BLOCKED"]
+    attempts: List[AttemptRecord]
+
+
+class PipelineRequest(BaseModel):
+    domain_id: str = Field(description="Target domain ID matching a rubric in backend/rubrics/*.json")
+    source_notes: str = Field(description="Ground-truth source notes or legal record packet")
+    practitioner_prompt: str = Field(description="The practitioner's prompt instructing the model")
+    model_id: Optional[str] = Field(
+        default="gemini-2.5-flash",
+        description="Selected model ID (e.g., gemini-2.5-flash, gemini-2.5-pro, claude-sonnet, gpt-4.1, o3-mini)"
+    )

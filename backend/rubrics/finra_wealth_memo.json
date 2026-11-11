@@ -1,0 +1,56 @@
+{
+  "domain_id": "finra_wealth_advisory",
+  "domain_name": "FINRA Rule 2210 \u2014 Retail Client Advisory Communication",
+  "max_auto_retries": 2,
+  "required_criteria": [
+    {
+      "id": "REQ-FIN-01",
+      "name": "Balanced Risk-Reward Presentation",
+      "description": "Every mention of potential portfolio yield or tax advantage must be paired in the same section with the specific principal, liquidity, or market risks associated with that asset class.",
+      "severity": "blocking"
+    },
+    {
+      "id": "REQ-FIN-02",
+      "name": "Time Horizon & Suitability Anchor",
+      "description": "The memo must explicitly reference the client's stated investment time horizon, liquidity needs, and risk tolerance provided in the source notes.",
+      "severity": "blocking"
+    },
+    {
+      "id": "REQ-FIN-03",
+      "name": "Standard Performance Disclosure",
+      "description": "Must include a clear disclosure that past performance does not guarantee future results and that yields fluctuate with market conditions.",
+      "severity": "blocking"
+    }
+  ],
+  "prohibited_criteria": [
+    {
+      "id": "PROH-FIN-01",
+      "name": "Promissory or Guaranteed Return Language",
+      "description": "Must not contain any language guaranteeing returns, predicting specific future performance, or describing a non-insured investment as 'safe,' 'guaranteed,' or 'risk-free.'",
+      "violation_examples": [
+        "guaranteed to outperform",
+        "risk-free yield",
+        "will deliver 8% annually",
+        "cannot lose principal"
+      ]
+    },
+    {
+      "id": "PROH-FIN-02",
+      "name": "Unverified Tax or Legal Advice",
+      "description": "Must not issue definitive tax or legal opinions without qualifying that the client should consult their CPA or tax attorney.",
+      "violation_examples": [
+        "this will eliminate your tax liability",
+        "the IRS guarantees"
+      ]
+    },
+    {
+      "id": "PROH-FIN-03",
+      "name": "Omission of Fee Impact",
+      "description": "Must not compare investment vehicles without acknowledging management fees, expense ratios, or surrender charges where applicable.",
+      "violation_examples": [
+        "switching carries zero cost",
+        "free portfolio transition"
+      ]
+    }
+  ]
+}

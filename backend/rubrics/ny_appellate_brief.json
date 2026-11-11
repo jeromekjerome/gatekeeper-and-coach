@@ -1,0 +1,45 @@
+{
+  "domain_id": "ny_litigation_drafting",
+  "domain_name": "NY State & Federal Appellate / Motion Drafting",
+  "max_auto_retries": 2,
+  "required_criteria": [
+    {
+      "id": "REQ-LEG-01",
+      "name": "Source-Grounded Record Anchoring",
+      "description": "Every factual assertion must map directly to a specific exhibit, affidavit, or transcript line provided in the practitioner's input packet.",
+      "severity": "blocking"
+    },
+    {
+      "id": "REQ-LEG-02",
+      "name": "Explicit Standard of Review",
+      "description": "The argument section must explicitly state and apply the governing procedural standard (e.g., CPLR 3212 summary judgment, FRCP 12(b)(6), or appellate abuse-of-discretion).",
+      "severity": "blocking"
+    },
+    {
+      "id": "REQ-LEG-03",
+      "name": "Adverse Authority / Counter-Argument Acknowledgment",
+      "description": "Must address the opposing party's primary factual or legal contention as supplied in the case notes rather than presenting a one-sided summary.",
+      "severity": "blocking"
+    }
+  ],
+  "prohibited_criteria": [
+    {
+      "id": "PROH-LEG-01",
+      "name": "Unanchored Case Citations (Hallucination Gate)",
+      "description": "Must NEVER cite any case name, reporter volume, or statutory provision that was not explicitly provided in the user's verified authority packet, unless flagged with a '[VERIFY CITATION Needed]' placeholder.",
+      "violation_examples": [
+        "In Smith v. Jones, 142 A.D.3d 101...",
+        "Under well-settled Second Circuit precedent... (without supplied source)"
+      ]
+    },
+    {
+      "id": "PROH-LEG-02",
+      "name": "Overstated Record Facts or Speculative Inference",
+      "description": "Must not upgrade disputed allegations into established facts or use absolute modifiers ('undisputedly,' 'conclusively') unless supported verbatim by the record.",
+      "violation_examples": [
+        "Defendant conclusively admitted...",
+        "It is undisputed that..."
+      ]
+    }
+  ]
+}

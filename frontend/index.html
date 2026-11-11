@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gatekeeper &amp; Coach — Enterprise AI Enablement Sandbox</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Top Institutional Header -->
+  <header class="topbar">
+    <div class="brand-block">
+      <div class="brand-shield" aria-hidden="true">G&amp;C</div>
+      <div>
+        <h1 class="brand-title">Gatekeeper &amp; Coach</h1>
+        <p class="brand-subtitle">Deterministic Dual-Criteria Compliance Loop &amp; AI Enablement Workbench</p>
+      </div>
+    </div>
+
+    <div class="topbar-controls">
+      <div class="control-group">
+        <label for="domainSelect">Regulated Domain Rubric</label>
+        <select id="domainSelect" aria-label="Select Regulated Domain Rubric"></select>
+      </div>
+
+      <div class="control-group">
+        <label for="modelSelect">Model Router</label>
+        <select id="modelSelect" aria-label="Select Model"></select>
+      </div>
+
+      <div class="scenario-buttons">
+        <span class="scenario-label">Demo Traps:</span>
+        <button type="button" id="loadFinraScenarioBtn" class="btn btn-secondary btn-sm">
+          Load FINRA Wealth Pitch
+        </button>
+        <button type="button" id="loadLegalScenarioBtn" class="btn btn-secondary btn-sm">
+          Load NY Litigation Brief
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Three-Column Enterprise Workbench -->
+  <main class="workbench-grid">
+    <!-- COLUMN 1: PRACTITIONER INPUT & ACTIVE RUBRIC -->
+    <section class="panel panel-input" aria-labelledby="inputPanelHeading">
+      <div class="panel-header">
+        <h2 id="inputPanelHeading">1. Practitioner Input &amp; Ground Truth</h2>
+        <span class="badge badge-neutral" id="activeDomainBadge">Loading...</span>
+      </div>
+
+      <div class="panel-body">
+        <div class="field-group">
+          <div class="field-header">
+            <label for="sourceNotesInput">Verified Source Notes / Record Packet (Ground Truth)</label>
+            <span class="field-hint">Facts, client profile, or legal exhibits</span>
+          </div>
+          <textarea
+            id="sourceNotesInput"
+            rows="7"
+            placeholder="Paste verified client notes, portfolio parameters, or court record exhibits here..."
+          ></textarea>
+        </div>
+
+        <div class="field-group">
+          <div class="field-header">
+            <label for="practitionerPromptInput">Practitioner Prompt</label>
+            <span class="field-hint">Your drafting instruction to the model</span>
+          </div>
+          <textarea
+            id="practitionerPromptInput"
+            rows="5"
+            placeholder="Enter your drafting instruction..."
+          ></textarea>
+        </div>
+
+        <button type="button" id="runPipelineBtn" class="btn btn-primary btn-block">
+          <span id="runBtnIcon">&#9654;</span>
+          <span id="runBtnText">Run Gatekeeper &amp; Auto-Remediation Loop</span>
+        </button>
+
+        <!-- Dynamic Rubric Inspector -->
+        <div class="rubric-inspector">
+          <div class="rubric-inspector-header">
+            <h3>Active JSON Compliance Rubric</h3>
+            <span class="rubric-meta" id="rubricRetryMeta">Max Auto-Retries: 2</span>
+          </div>
+          <div id="rubricCriteriaContainer" class="rubric-criteria-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 2: AUDIT TRAIL & DRAFT COMPARISON (ATTEMPT 1 vs ATTEMPT 2) -->
+    <section class="panel panel-audit" aria-labelledby="auditPanelHeading">
+      <div class="panel-header">
+        <h2 id="auditPanelHeading">2. Deterministic Gatekeeper Audit Trail</h2>
+        <span class="badge badge-idle" id="pipelineStatusBadge">AWAITING RUN</span>
+      </div>
+
+      <div class="panel-body" id="auditTrailBody">
+        <!-- Empty / Initial State -->
+        <div id="auditEmptyState" class="empty-state">
+          <div class="empty-icon">&#128737;</div>
+          <h3>Dual-Criteria Evaluation &amp; Auto-Retry</h3>
+          <p>
+            Select a demo scenario above or enter your own Source Notes and Prompt, then click
+            <strong>Run Gatekeeper &amp; Auto-Remediation Loop</strong>.
+          </p>
+          <ul class="invariant-list">
+            <li><strong>Attempt 1 (Blocked in Red):</strong> Exposes how a flawed practitioner prompt induces compliance violations or hallucinations.</li>
+            <li><strong>Attempt 2 (Remediated in Green):</strong> Demonstrates deterministic auto-retry anchored strictly to the JSON rubric and source record.</li>
+          </ul>
+        </div>
+
+        <!-- Loading State -->
+        <div id="auditLoadingState" class="loading-state hidden" role="status" aria-live="polite">
+          <div class="spinner"></div>
+          <h3 id="loadingStepTitle">Executing Gatekeeper Pipeline...</h3>
+          <p id="loadingStepSubtitle">
+            Generating Attempt 1 draft, grading Required &amp; Prohibited criteria, and routing auto-remediation if blocked...
+          </p>
+        </div>
+
+        <!-- Error Banner -->
+        <div id="auditErrorBanner" class="error-banner hidden" role="alert"></div>
+
+        <!-- Populated Audit Results -->
+        <div id="auditResultsContainer" class="audit-results hidden">
+          <div id="pipelineSummaryBanner" class="pipeline-summary-banner"></div>
+          <div id="attemptsComparisonGrid" class="attempts-comparison-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 3: INTERACTIVE ENABLEMENT COACH & HITL EXPORT GATE -->
+    <section class="panel panel-coach" aria-labelledby="coachPanelHeading">
+      <div class="panel-header">
+        <h2 id="coachPanelHeading">3. Enablement Coach &amp; HITL Gate</h2>
+        <span class="badge badge-neutral" id="promptScoreBadge">Prompt Score: --</span>
+      </div>
+
+      <div class="panel-body">
+        <div id="coachEmptyState" class="empty-state">
+          <div class="empty-icon">&#127891;</div>
+          <h3>No Silent Fixes</h3>
+          <p>
+            Whenever the Gatekeeper blocks and rewrites a draft, the Enablement Coach diagnoses
+            <em>why</em> your original prompt caused the failure, provides a reusable prompt template,
+            and enforces a mandatory Human-in-the-Loop (HITL) verification checklist before export.
+          </p>
+        </div>
+
+        <div id="coachContentContainer" class="coach-content hidden">
+          <!-- Prompt Quality Meter -->
+          <div class="coach-card score-card">
+            <div class="score-header">
+              <span class="score-label">Original Prompt Quality Score</span>
+              <span class="score-value" id="coachScoreValue">0 / 100</span>
+            </div>
+            <div class="score-bar-track">
+              <div id="coachScoreBar" class="score-bar-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Root Cause Diagnosis -->
+          <div class="coach-card diagnosis-card">
+            <div class="card-title-row">
+              <h3>Why Your Original Prompt Caused This</h3>
+              <span class="tag-pill tag-warning">Root-Cause Diagnosis</span>
+            </div>
+            <p id="coachWhyText" class="coach-prose"></p>
+          </div>
+
+          <!-- Upgraded Prompt Template -->
+          <div class="coach-card template-card">
+            <div class="card-title-row">
+              <h3>Upgraded Practitioner Prompt Template</h3>
+              <button type="button" id="applyUpgradedPromptBtn" class="btn btn-secondary btn-xs">
+                Load into Prompt Editor
+              </button>
+            </div>
+            <pre id="coachUpgradedPrompt" class="upgraded-prompt-box"></pre>
+          </div>
+
+          <!-- Human-in-the-Loop (HITL) Verification Gate -->
+          <div class="coach-card hitl-card">
+            <div class="card-title-row">
+              <h3>Human-in-the-Loop (HITL) Verification</h3>
+              <span id="hitlProgressBadge" class="tag-pill tag-locked">0 / 0 Verified</span>
+            </div>
+            <p class="hitl-instructions">
+              As the licensed professional of record, you must manually verify and check every item below
+              before unlocking final document export:
+            </p>
+            <div id="hitlChecklistContainer" class="hitl-checklist"></div>
+          </div>
+        </div>
+
+        <!-- Strict Export Gate Footer (Always visible in Column 3) -->
+        <div class="export-gate-footer">
+          <div class="gate-requirements-status">
+            <div class="gate-req-item" id="gateReqCompliance">
+              <span class="req-indicator" id="gateReqComplianceIcon">&#128274;</span>
+              <span>Gate Status == <code>PASSED</code> (All Rubric Criteria)</span>
+            </div>
+            <div class="gate-req-item" id="gateReqHitl">
+              <span class="req-indicator" id="gateReqHitlIcon">&#128274;</span>
+              <span>100% of HITL Verification Boxes Checked</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="exportDocBtn"
+            class="btn btn-export"
+            disabled
+          >
+            &#128274; Unlock &amp; Export Final Document
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Export Verified Document Modal -->
+  <div id="exportModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h2 id="exportModalTitle">Verified Compliance Export Certificate &amp; Final Draft</h2>
+          <p class="modal-subtitle">Gatekeeper PASSED &bull; Human-in-the-Loop Attestation Complete</p>
+        </div>
+        <button type="button" id="closeExportModalBtn" class="btn-icon" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre id="exportDocumentPreview" class="export-preview-box"></pre>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="copyExportBtn" class="btn btn-secondary">Copy to Clipboard</button>
+        <button type="button" id="downloadExportBtn" class="btn btn-primary">Download Verified .txt</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

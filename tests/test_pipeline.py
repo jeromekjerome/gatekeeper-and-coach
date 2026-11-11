@@ -9,6 +9,7 @@ from backend.citator import (
     verify_citation_courtlistener,
 )
 from backend.evaluator import enforce_deterministic_gate
+from backend.gamification import score_enablement_run
 from backend.main import app
 from backend.retry_router import (
     load_all_rubrics,
@@ -16,6 +17,8 @@ from backend.retry_router import (
     run_gatekeeper_pipeline,
 )
 from backend.schemas import (
+    AttemptRecord,
+    CitationAuditItem,
     EnablementCoaching,
     EvaluationReport,
     ProhibitedCheckResult,
@@ -227,6 +230,66 @@ def test_retry_router_auditability_and_no_silent_fixes(
     assert response.attempts[1].evaluation.enablement_coaching.prompt_quality_score == 25
 
 
+def test_practitioner_enablement_gamification_scoring():
+    # Case 1: 2-attempt remediated run (Attempt 1 BLOCKED -> Attempt 2 PASSED)
+    # Starting at 80 XP and streak=2 -> awards 35 XP (total_xp == 115, Grounded Associate),
+    # resets first_pass_streak == 0, and unlocks "remediation_learner"
+    eval_blocked = _make_sample_report(req_passed=False, proh_violated=True, claimed_status="BLOCKED")
+    eval_passed = _make_sample_report(req_passed=True, proh_violated=False, claimed_status="PASSED")
+    remediated_attempts = [
+        AttemptRecord(attempt_number=1, draft_text="Blocked draft", evaluation=eval_blocked),
+        AttemptRecord(attempt_number=2, draft_text="Remediated draft", evaluation=eval_passed),
+    ]
+
+    reward_remediated = score_enablement_run(
+        domain_id="finra_wealth_advisory",
+        attempts=remediated_attempts,
+        current_xp=80,
+        current_streak=2,
+        unlocked_badges=[],
+    )
+    assert reward_remediated.xp_earned == 35
+    assert reward_remediated.total_xp == 115
+    assert reward_remediated.level_name == "Grounded Associate"
+    assert reward_remediated.first_pass_streak == 0
+    assert reward_remediated.first_pass_compliant is False
+    unlocked_ids_1 = {b.id for b in reward_remediated.newly_unlocked_badges}
+    assert "remediation_learner" in unlocked_ids_1
+
+    # Case 2: 1-attempt First-Pass Compliant run (Attempt 1 PASSED, prompt_quality_score == 90,
+    # and 1 ANCHORED citation) starting at 115 XP and streak=2 -> increments first_pass_streak to 3,
+    # awards 195 XP (100 base + 45 prompt quality + 50 streak bonus -> total_xp == 310,
+    # level_name == "Compliance Practitioner"), and unlocks
+    # {"first_pass_compliant", "prompt_architect", "streak_3", "citation_sentinel"}
+    eval_first_pass = _make_sample_report(req_passed=True, proh_violated=False, claimed_status="PASSED")
+    eval_first_pass.enablement_coaching.prompt_quality_score = 90
+    eval_first_pass.citation_audit = [
+        CitationAuditItem(
+            citation_text="Rose v. Spa Realty Assoc., 42 N.Y.2d 338 (1977)",
+            status="ANCHORED",
+            courtlistener_status="VERIFIED",
+        )
+    ]
+
+    reward_first_pass = score_enablement_run(
+        domain_id="ny_litigation_drafting",
+        attempts=[AttemptRecord(attempt_number=1, draft_text="Compliant brief", evaluation=eval_first_pass)],
+        current_xp=115,
+        current_streak=2,
+        unlocked_badges=["remediation_learner"],
+    )
+    assert reward_first_pass.first_pass_compliant is True
+    assert reward_first_pass.first_pass_streak == 3
+    assert reward_first_pass.streak_bonus_xp == 50
+    assert reward_first_pass.xp_earned == 195
+    assert reward_first_pass.total_xp == 310
+    assert reward_first_pass.level_name == "Compliance Practitioner"
+    newly_unlocked_ids_2 = {b.id for b in reward_first_pass.newly_unlocked_badges}
+    assert {"first_pass_compliant", "prompt_architect", "streak_3", "citation_sentinel"}.issubset(
+        newly_unlocked_ids_2
+    )
+
+
 def test_fastapi_endpoints():
     health = client.get("/api/health")
     assert health.status_code == 200
@@ -239,9 +302,13 @@ def test_fastapi_endpoints():
     assert "finra_scenario" in payload["scenarios"]
     assert "legal_scenario" in payload["scenarios"]
     assert len(payload["models"]) >= 2
+    assert "gamification" in payload
+    assert len(payload["gamification"]["levels"]) == 5
+    assert len(payload["gamification"]["badges"]) == 6
 
     index_page = client.get("/")
     assert index_page.status_code == 200
     assert "Gatekeeper &amp; Coach" in index_page.text
+    assert 'id="practitionerMasteryCard"' in index_page.text
     assert 'id="exportDocBtn"' in index_page.text
     assert "disabled" in index_page.text

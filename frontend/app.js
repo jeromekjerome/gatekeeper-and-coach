@@ -13,10 +13,66 @@
  *    explains what flaw in the practitioner's original prompt caused Attempt 1 to fail.
  */
 
+const MASTERY_STORAGE_KEY = "gatekeeper_coach_mastery_v1";
+
 const state = {
   domains: [],
   scenarios: {},
   models: [],
+  gamificationCatalog: {
+    levels: [
+      { name: "Novice Drafter", min_xp: 0, icon: "📘" },
+      { name: "Grounded Associate", min_xp: 100, icon: "⚖️" },
+      { name: "Compliance Practitioner", min_xp: 250, icon: "🛡️" },
+      { name: "Principal Gatekeeper", min_xp: 500, icon: "🏛️" },
+      { name: "Supervisory Principal", min_xp: 850, icon: "👑" },
+    ],
+    badges: [
+      {
+        id: "first_pass_compliant",
+        name: "First-Pass Compliant",
+        icon: "⚡",
+        description: "Passed 100% of Required and Prohibited criteria on Attempt #1 without auto-remediation.",
+      },
+      {
+        id: "prompt_architect",
+        name: "Prompt Architect",
+        icon: "🎯",
+        description: "Engineered an original practitioner prompt scoring 85/100 or higher.",
+      },
+      {
+        id: "citation_sentinel",
+        name: "Citation Sentinel",
+        icon: "📚",
+        description: "Completed a legal drafting run with anchored record citations and zero unanchored hallucinations.",
+      },
+      {
+        id: "finra_guardian",
+        name: "FINRA 2210 Guardian",
+        icon: "🛡️",
+        description: "Passed a FINRA wealth advisory evaluation on Attempt #1 with balanced risk and fee disclosures.",
+      },
+      {
+        id: "streak_3",
+        name: "3x Zero-Violation Streak",
+        icon: "🔥",
+        description: "Achieved 3 consecutive First-Pass Compliant runs without triggering the retry router.",
+      },
+      {
+        id: "remediation_learner",
+        name: "Coach Apprentice",
+        icon: "🎓",
+        description: "Completed a root-cause coaching cycle after Attempt #1 was intercepted and remediated.",
+      },
+    ],
+  },
+  mastery: {
+    total_xp: 0,
+    first_pass_streak: 0,
+    unlocked_badges: [],
+    last_xp_earned: 0,
+    newly_unlocked_ids: [],
+  },
   activeDomainId: "",
   latestPipelineResponse: null,
   hitlCheckedMap: {}, // index -> boolean
@@ -55,6 +111,18 @@ const applyUpgradedPromptBtn = document.getElementById("applyUpgradedPromptBtn")
 const hitlProgressBadge = document.getElementById("hitlProgressBadge");
 const hitlChecklistContainer = document.getElementById("hitlChecklistContainer");
 
+const masteryLevelIcon = document.getElementById("masteryLevelIcon");
+const masteryLevelName = document.getElementById("masteryLevelName");
+const masteryStreakPill = document.getElementById("masteryStreakPill");
+const masteryStreakCount = document.getElementById("masteryStreakCount");
+const masteryTotalXpPill = document.getElementById("masteryTotalXpPill");
+const masteryXpBarFill = document.getElementById("masteryXpBarFill");
+const masteryNextLevelHint = document.getElementById("masteryNextLevelHint");
+const masteryLastGainBadge = document.getElementById("masteryLastGainBadge");
+const masteryBadgeCount = document.getElementById("masteryBadgeCount");
+const masteryBadgesGrid = document.getElementById("masteryBadgesGrid");
+const resetMasteryBtn = document.getElementById("resetMasteryBtn");
+
 const gateReqCompliance = document.getElementById("gateReqCompliance");
 const gateReqComplianceIcon = document.getElementById("gateReqComplianceIcon");
 const gateReqHitl = document.getElementById("gateReqHitl");
@@ -80,7 +148,12 @@ async function initWorkbench() {
     state.domains = config.domains || [];
     state.scenarios = config.scenarios || {};
     state.models = config.models || [];
+    if (config.gamification) {
+      state.gamificationCatalog = config.gamification;
+    }
 
+    loadMasteryState();
+    renderMasteryCard();
     renderDomainOptions();
     renderModelOptions();
 
@@ -226,6 +299,9 @@ async function runGatekeeperLoop() {
         source_notes: sourceNotes,
         practitioner_prompt: practitionerPrompt,
         model_id: modelId,
+        current_xp: state.mastery.total_xp || 0,
+        current_streak: state.mastery.first_pass_streak || 0,
+        unlocked_badges: state.mastery.unlocked_badges || [],
       }),
     });
 
@@ -460,7 +536,160 @@ function renderPipelineResults(pipelineData) {
     renderEnablementCoach(latestAttempt.evaluation.enablement_coaching);
   }
 
+  // Update Practitioner Enablement Gamification & Mastery Card
+  if (pipelineData.enablement_reward) {
+    applyEnablementReward(pipelineData.enablement_reward);
+  }
+
   enforceStrictExportGate();
+}
+
+function loadMasteryState() {
+  try {
+    const raw = localStorage.getItem(MASTERY_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    state.mastery.total_xp = Number(parsed.total_xp || 0);
+    state.mastery.first_pass_streak = Number(parsed.first_pass_streak || 0);
+    state.mastery.unlocked_badges = Array.isArray(parsed.unlocked_badges)
+      ? parsed.unlocked_badges
+      : [];
+    state.mastery.last_xp_earned = 0;
+    state.mastery.newly_unlocked_ids = [];
+  } catch (_) {
+    // Ignore storage parse errors
+  }
+}
+
+function saveMasteryState() {
+  try {
+    localStorage.setItem(
+      MASTERY_STORAGE_KEY,
+      JSON.stringify({
+        total_xp: state.mastery.total_xp,
+        first_pass_streak: state.mastery.first_pass_streak,
+        unlocked_badges: state.mastery.unlocked_badges,
+      })
+    );
+  } catch (_) {
+    // Ignore storage quota errors
+  }
+}
+
+function computeClientLevelMetadata(totalXp) {
+  const levels = state.gamificationCatalog.levels || [];
+  if (!levels.length) {
+    return {
+      level_name: "Novice Drafter",
+      level_icon: "📘",
+      progress_pct: 0,
+      next_level_name: "Grounded Associate",
+      xp_to_next_level: 100,
+    };
+  }
+  let idx = 0;
+  for (let i = levels.length - 1; i >= 0; i--) {
+    if (totalXp >= levels[i].min_xp) {
+      idx = i;
+      break;
+    }
+  }
+  const cur = levels[idx];
+  const next = idx + 1 < levels.length ? levels[idx + 1] : null;
+  if (next) {
+    const span = Math.max(1, next.min_xp - cur.min_xp);
+    const pct = Math.min(100, Math.max(0, Math.round(((totalXp - cur.min_xp) / span) * 100)));
+    return {
+      level_name: cur.name,
+      level_icon: cur.icon,
+      progress_pct: pct,
+      next_level_name: next.name,
+      xp_to_next_level: Math.max(0, next.min_xp - totalXp),
+    };
+  }
+  return {
+    level_name: cur.name,
+    level_icon: cur.icon,
+    progress_pct: 100,
+    next_level_name: null,
+    xp_to_next_level: 0,
+  };
+}
+
+function applyEnablementReward(reward) {
+  state.mastery.total_xp = Number(reward.total_xp ?? state.mastery.total_xp);
+  state.mastery.first_pass_streak = Number(reward.first_pass_streak ?? 0);
+  state.mastery.last_xp_earned = Number(reward.xp_earned ?? 0);
+  state.mastery.newly_unlocked_ids = (reward.newly_unlocked_badges || []).map((b) => b.id);
+  state.mastery.unlocked_badges = (reward.all_badges || []).map((b) => b.id);
+
+  saveMasteryState();
+  renderMasteryCard(reward);
+}
+
+function renderMasteryCard(rewardOverride = null) {
+  const totalXp = state.mastery.total_xp || 0;
+  const streak = state.mastery.first_pass_streak || 0;
+  const lvl = rewardOverride || computeClientLevelMetadata(totalXp);
+
+  if (masteryLevelIcon) masteryLevelIcon.textContent = lvl.level_icon || "📘";
+  if (masteryLevelName) masteryLevelName.textContent = lvl.level_name || "Novice Drafter";
+  if (masteryStreakCount) masteryStreakCount.textContent = String(streak);
+  if (masteryStreakPill) {
+    masteryStreakPill.classList.toggle("streak-hot", streak > 0);
+  }
+  if (masteryTotalXpPill) masteryTotalXpPill.textContent = `${totalXp} XP`;
+  if (masteryXpBarFill) {
+    masteryXpBarFill.style.width = `${Math.min(100, Math.max(0, lvl.progress_pct ?? 0))}%`;
+  }
+  if (masteryNextLevelHint) {
+    masteryNextLevelHint.textContent = lvl.next_level_name
+      ? `${lvl.xp_to_next_level} XP to ${lvl.next_level_name}`
+      : "Max Supervisory Rank Achieved";
+  }
+
+  if (masteryLastGainBadge) {
+    if (state.mastery.last_xp_earned > 0) {
+      const bonusSuffix =
+        rewardOverride && rewardOverride.streak_bonus_xp > 0
+          ? ` (incl. +${rewardOverride.streak_bonus_xp} Streak)`
+          : "";
+      masteryLastGainBadge.textContent = `+${state.mastery.last_xp_earned} XP${bonusSuffix}`;
+      masteryLastGainBadge.classList.remove("hidden");
+    } else {
+      masteryLastGainBadge.classList.add("hidden");
+    }
+  }
+
+  const catalogBadges = state.gamificationCatalog.badges || [];
+  const unlockedSet = new Set(state.mastery.unlocked_badges || []);
+  const newlyUnlockedSet = new Set(state.mastery.newly_unlocked_ids || []);
+
+  if (masteryBadgeCount) {
+    masteryBadgeCount.textContent = String(unlockedSet.size);
+  }
+
+  if (masteryBadgesGrid) {
+    masteryBadgesGrid.innerHTML = "";
+    catalogBadges.forEach((badge) => {
+      const isUnlocked = unlockedSet.has(badge.id);
+      const isJustUnlocked = newlyUnlockedSet.has(badge.id);
+      const chip = document.createElement("div");
+      chip.className = `mastery-badge-chip ${
+        isJustUnlocked
+          ? "badge-just-unlocked"
+          : isUnlocked
+          ? "badge-unlocked"
+          : "badge-locked"
+      }`;
+      chip.title = badge.description || badge.name;
+      chip.innerHTML = `
+        <span>${escapeHtml(badge.icon)}</span>
+        <span>${escapeHtml(badge.name)}</span>
+      `;
+      masteryBadgesGrid.appendChild(chip);
+    });
+  }
 }
 
 /**
@@ -646,6 +875,20 @@ applyUpgradedPromptBtn.addEventListener("click", () => {
     practitionerPromptInput.focus();
   }
 });
+
+if (resetMasteryBtn) {
+  resetMasteryBtn.addEventListener("click", () => {
+    state.mastery = {
+      total_xp: 0,
+      first_pass_streak: 0,
+      unlocked_badges: [],
+      last_xp_earned: 0,
+      newly_unlocked_ids: [],
+    };
+    saveMasteryState();
+    renderMasteryCard();
+  });
+}
 
 exportDocBtn.addEventListener("click", () => {
   if (exportDocBtn.disabled) return;

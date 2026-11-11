@@ -70,10 +70,33 @@ class AttemptRecord(BaseModel):
     evaluation: EvaluationReport
 
 
+class BadgeAward(BaseModel):
+    id: str
+    name: str
+    icon: str
+    description: str
+
+
+class EnablementReward(BaseModel):
+    xp_earned: int
+    streak_bonus_xp: int = 0
+    total_xp: int
+    first_pass_streak: int
+    first_pass_compliant: bool
+    level_name: str
+    level_icon: str
+    progress_pct: int
+    next_level_name: Optional[str] = None
+    xp_to_next_level: int = 0
+    newly_unlocked_badges: List[BadgeAward] = Field(default_factory=list)
+    all_badges: List[BadgeAward] = Field(default_factory=list)
+
+
 class PipelineResponse(BaseModel):
     domain_id: str
     final_status: Literal["PASSED", "BLOCKED"]
     attempts: List[AttemptRecord]
+    enablement_reward: Optional[EnablementReward] = None
 
 
 class PipelineRequest(BaseModel):
@@ -89,4 +112,18 @@ class PipelineRequest(BaseModel):
     model_id: Optional[str] = Field(
         default="gemini-2.5-flash",
         description="Selected model ID (e.g., gemini-2.5-flash, gemini-2.5-pro, claude-sonnet, gpt-4.1, o3-mini)",
+    )
+    current_xp: int = Field(
+        default=0,
+        ge=0,
+        description="Practitioner's accumulated XP prior to this run",
+    )
+    current_streak: int = Field(
+        default=0,
+        ge=0,
+        description="Practitioner's consecutive First-Pass Compliant streak",
+    )
+    unlocked_badges: List[str] = Field(
+        default_factory=list,
+        description="Badge IDs already unlocked by the practitioner",
     )

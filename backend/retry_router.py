@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.evaluator import evaluate_draft_and_coach
+from backend.gamification import score_enablement_run
 from backend.model_adapter import generate_text
 from backend.schemas import AttemptRecord, EvaluationReport, PipelineResponse
 
@@ -144,6 +145,9 @@ def run_gatekeeper_pipeline(
     source_notes: str,
     practitioner_prompt: str,
     model_id: Optional[str] = "gemini-2.5-flash",
+    current_xp: int = 0,
+    current_streak: int = 0,
+    unlocked_badges: Optional[List[str]] = None,
 ) -> PipelineResponse:
     """
     Executes the full Deterministic Dual-Criteria Evaluation & Auto-Retry Loop:
@@ -240,8 +244,17 @@ def run_gatekeeper_pipeline(
         current_draft = remediated_draft
         current_eval = remediated_eval
 
+    reward = score_enablement_run(
+        domain_id=domain_id,
+        attempts=attempts,
+        current_xp=current_xp,
+        current_streak=current_streak,
+        unlocked_badges=unlocked_badges,
+    )
+
     return PipelineResponse(
         domain_id=domain_id,
         final_status=current_eval.gate_status,
         attempts=attempts,
+        enablement_reward=reward,
     )

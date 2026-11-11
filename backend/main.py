@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+from backend.gamification import MASTERY_BADGES, PRACTITIONER_LEVELS
 from backend.model_adapter import list_available_models
 from backend.retry_router import load_all_rubrics, run_gatekeeper_pipeline
 from backend.schemas import PipelineRequest, PipelineResponse
@@ -61,6 +62,10 @@ def get_workbench_config() -> Dict[str, Any]:
         "domains": domains,
         "scenarios": scenarios,
         "models": list_available_models(),
+        "gamification": {
+            "levels": PRACTITIONER_LEVELS,
+            "badges": list(MASTERY_BADGES.values()),
+        },
     }
 
 
@@ -84,6 +89,9 @@ def evaluate_pipeline_endpoint(request: PipelineRequest) -> PipelineResponse:
             source_notes=request.source_notes,
             practitioner_prompt=request.practitioner_prompt,
             model_id=request.model_id,
+            current_xp=request.current_xp,
+            current_streak=request.current_streak,
+            unlocked_badges=request.unlocked_badges,
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve)) from ve

@@ -140,6 +140,38 @@
       </div>
 
       <div class="panel-body">
+        <div class="coach-card mastery-card" id="practitionerMasteryCard">
+          <div class="mastery-top-row">
+            <div class="mastery-level-block">
+              <span class="mastery-level-icon" id="masteryLevelIcon">📘</span>
+              <div>
+                <div class="mastery-level-label">Practitioner Enablement Rank</div>
+                <div class="mastery-level-name" id="masteryLevelName">Novice Drafter</div>
+              </div>
+            </div>
+            <div class="mastery-stats-right">
+              <span class="streak-pill" id="masteryStreakPill" title="Consecutive Attempt #1 First-Pass Compliant Runs">
+                🔥 <span id="masteryStreakCount">0</span> First-Pass Streak
+              </span>
+              <span class="xp-pill" id="masteryTotalXpPill">0 XP</span>
+            </div>
+          </div>
+          <div class="mastery-xp-bar-track">
+            <div class="mastery-xp-bar-fill" id="masteryXpBarFill" style="width: 0%"></div>
+          </div>
+          <div class="mastery-xp-meta-row">
+            <span id="masteryNextLevelHint">100 XP to Grounded Associate</span>
+            <span id="masteryLastGainBadge" class="xp-gain-tag hidden">+0 XP</span>
+          </div>
+          <div class="mastery-badges-section">
+            <div class="mastery-badges-header">
+              <span>Mastery Badges (<span id="masteryBadgeCount">0</span>/6 Unlocked)</span>
+              <button type="button" id="resetMasteryBtn" class="btn-link-xs" title="Reset local XP & badge progress">Reset</button>
+            </div>
+            <div class="mastery-badges-grid" id="masteryBadgesGrid"></div>
+          </div>
+        </div>
+
         <div id="coachEmptyState" class="empty-state">
           <div class="empty-icon">&#127891;</div>
           <h3>No Silent Fixes</h3>

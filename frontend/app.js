@@ -81,6 +81,7 @@ const state = {
 // DOM Elements
 const domainSelect = document.getElementById("domainSelect");
 const modelSelect = document.getElementById("modelSelect");
+const modelHealthBadge = document.getElementById("modelHealthBadge");
 const loadFinraScenarioBtn = document.getElementById("loadFinraScenarioBtn");
 const loadLegalScenarioBtn = document.getElementById("loadLegalScenarioBtn");
 
@@ -156,6 +157,7 @@ async function initWorkbench() {
     renderMasteryCard();
     renderDomainOptions();
     renderModelOptions();
+    renderModelHealthBadge(config.model_health);
 
     // Load default FINRA scenario on initial boot for immediate zero-friction evaluation
     if (state.scenarios.finra_scenario) {
@@ -541,7 +543,45 @@ function renderPipelineResults(pipelineData) {
     applyEnablementReward(pipelineData.enablement_reward);
   }
 
+  // Update Model Router Telemetry Badge
+  if (pipelineData.model_routing) {
+    renderRoutingTelemetry(pipelineData.model_routing);
+  }
+
   enforceStrictExportGate();
+}
+
+function renderModelHealthBadge(health) {
+  if (!modelHealthBadge || !health) return;
+  const fallbacks = health.drafting_chain?.fallbacks_available || [];
+  if (health.status === "ready") {
+    modelHealthBadge.className = "model-health-pill health-ready";
+    modelHealthBadge.textContent = `● Ready (${fallbacks.length} Fallback${
+      fallbacks.length === 1 ? "" : "s"
+    })`;
+    modelHealthBadge.title = `Active Primary: ${
+      health.drafting_chain?.active || "default"
+    } | Fallbacks: ${fallbacks.join(" → ") || "none"}`;
+  } else {
+    modelHealthBadge.className = "model-health-pill health-warn";
+    modelHealthBadge.textContent = "● No API Key Set";
+    modelHealthBadge.title =
+      "Configure GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in .env";
+  }
+}
+
+function renderRoutingTelemetry(routing) {
+  if (!modelHealthBadge || !routing || !routing.executed_model) return;
+  if (routing.failover_triggered) {
+    modelHealthBadge.className = "model-health-pill health-failover";
+    modelHealthBadge.textContent = `⚡ Failover → ${routing.executed_model}`;
+    modelHealthBadge.title = `Requested: ${routing.requested_model} | Attempted chain: ${(
+      routing.attempted_models || []
+    ).join(" → ")}`;
+  } else {
+    modelHealthBadge.className = "model-health-pill health-ready";
+    modelHealthBadge.textContent = `● Active: ${routing.executed_model}`;
+  }
 }
 
 function loadMasteryState() {

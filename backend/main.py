@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 from backend.gamification import MASTERY_BADGES, PRACTITIONER_LEVELS
-from backend.model_adapter import list_available_models
+from backend.model_adapter import list_available_models, probe_model_chain_health
 from backend.retry_router import load_all_rubrics, run_gatekeeper_pipeline
 from backend.schemas import PipelineRequest, PipelineResponse
 
@@ -43,6 +43,11 @@ def health_check() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/health/models")
+def model_health_check(force: bool = False) -> Dict[str, Any]:
+    return probe_model_chain_health(force=force)
+
+
 @app.get("/api/config")
 def get_workbench_config() -> Dict[str, Any]:
     """
@@ -62,6 +67,7 @@ def get_workbench_config() -> Dict[str, Any]:
         "domains": domains,
         "scenarios": scenarios,
         "models": list_available_models(),
+        "model_health": probe_model_chain_health(force=False),
         "gamification": {
             "levels": PRACTITIONER_LEVELS,
             "badges": list(MASTERY_BADGES.values()),

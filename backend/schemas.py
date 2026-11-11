@@ -92,11 +92,19 @@ class EnablementReward(BaseModel):
     all_badges: List[BadgeAward] = Field(default_factory=list)
 
 
+class ModelRoutingTelemetry(BaseModel):
+    requested_model: Optional[str] = None
+    executed_model: Optional[str] = None
+    failover_triggered: bool = False
+    attempted_models: List[str] = Field(default_factory=list)
+
+
 class PipelineResponse(BaseModel):
     domain_id: str
     final_status: Literal["PASSED", "BLOCKED"]
     attempts: List[AttemptRecord]
     enablement_reward: Optional[EnablementReward] = None
+    model_routing: Optional[ModelRoutingTelemetry] = None
 
 
 class PipelineRequest(BaseModel):

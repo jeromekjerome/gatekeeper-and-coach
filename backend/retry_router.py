@@ -6,8 +6,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from backend.evaluator import evaluate_draft_and_coach
 from backend.gamification import score_enablement_run
-from backend.model_adapter import generate_text
-from backend.schemas import AttemptRecord, EvaluationReport, PipelineResponse
+from backend.model_adapter import generate_text, get_last_routing_telemetry
+from backend.schemas import (
+    AttemptRecord,
+    EvaluationReport,
+    ModelRoutingTelemetry,
+    PipelineResponse,
+)
 
 
 RUBRICS_DIR = Path(__file__).resolve().parent / "rubrics"
@@ -257,4 +262,5 @@ def run_gatekeeper_pipeline(
         final_status=current_eval.gate_status,
         attempts=attempts,
         enablement_reward=reward,
+        model_routing=ModelRoutingTelemetry(**get_last_routing_telemetry()),
     )

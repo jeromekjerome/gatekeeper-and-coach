@@ -295,6 +295,12 @@ def test_fastapi_endpoints():
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
 
+    model_health = client.get("/api/health/models")
+    assert model_health.status_code == 200
+    mh_payload = model_health.json()
+    assert "drafting_chain" in mh_payload
+    assert "evaluation_chain" in mh_payload
+
     config = client.get("/api/config")
     assert config.status_code == 200
     payload = config.json()
@@ -302,6 +308,7 @@ def test_fastapi_endpoints():
     assert "finra_scenario" in payload["scenarios"]
     assert "legal_scenario" in payload["scenarios"]
     assert len(payload["models"]) >= 2
+    assert "model_health" in payload
     assert "gamification" in payload
     assert len(payload["gamification"]["levels"]) == 5
     assert len(payload["gamification"]["badges"]) == 6
@@ -310,5 +317,45 @@ def test_fastapi_endpoints():
     assert index_page.status_code == 200
     assert "Gatekeeper &amp; Coach" in index_page.text
     assert 'id="practitionerMasteryCard"' in index_page.text
+    assert 'id="modelHealthBadge"' in index_page.text
     assert 'id="exportDocBtn"' in index_page.text
     assert "disabled" in index_page.text
+
+
+def test_model_failover_chain_and_health_probe():
+    from backend.model_adapter import (
+        build_model_failover_chain,
+        generate_text,
+        get_last_routing_telemetry,
+        is_retriable_model_error,
+        probe_model_chain_health,
+    )
+
+    assert is_retriable_model_error(TimeoutError("Request timed out"))
+    assert is_retriable_model_error(RuntimeError("HTTP 429 Rate limit exceeded"))
+    assert not is_retriable_model_error(ValueError("Invalid schema validation error"))
+
+    chain = build_model_failover_chain("gemini-2.5-flash")
+    assert len(chain) >= 2
+    assert chain[0] == "gemini-2.5-flash"
+
+    with patch("backend.model_adapter._invoke_single_model_text") as mock_invoke:
+        mock_invoke.side_effect = [
+            RuntimeError("429 Resource Exhausted: rate limit"),
+            "Remediated compliant text from fallback model",
+        ]
+        result = generate_text(
+            system_instruction="System",
+            user_prompt="Prompt",
+            model_id="gemini-2.5-flash",
+        )
+        assert result == "Remediated compliant text from fallback model"
+        telemetry = get_last_routing_telemetry()
+        assert telemetry["requested_model"] == "gemini-2.5-flash"
+        assert telemetry["failover_triggered"] is True
+        assert len(telemetry["attempted_models"]) == 2
+
+    health = probe_model_chain_health(force=True)
+    assert "drafting_chain" in health
+    assert "evaluation_chain" in health
+    assert health["drafting_chain"]["active"] == "gemini-2.5-flash"

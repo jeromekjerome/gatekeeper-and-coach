@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import urllib.request
 import urllib.error
 from typing import Any, Dict, List, Optional, Type
@@ -27,12 +28,14 @@ SUPPORTED_MODELS: List[Dict[str, str]] = [
         "label": "Google Gemini 2.5 Flash (Default — Fast)",
         "provider": "google",
         "env_key": "GEMINI_API_KEY",
+        "api_model": "gemini-2.5-flash",
     },
     {
         "id": "gemini-2.5-pro",
         "label": "Google Gemini 2.5 Pro (Deep Compliance Reasoning)",
         "provider": "google",
         "env_key": "GEMINI_API_KEY",
+        "api_model": "gemini-2.5-pro",
     },
     {
         "id": "claude-sonnet",
@@ -57,6 +60,24 @@ SUPPORTED_MODELS: List[Dict[str, str]] = [
     },
 ]
 
+DEFAULT_FALLBACK_ORDER: List[str] = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gpt-4.1",
+    "claude-sonnet",
+    "o3-mini",
+]
+
+MODEL_HEALTH_TTL_SECONDS = int(os.environ.get("MODEL_HEALTH_TTL_SECONDS", "60"))
+_model_health_cache: Optional[Dict[str, Any]] = None
+_model_health_timestamp: float = 0.0
+_last_routing_telemetry: Dict[str, Any] = {
+    "requested_model": None,
+    "executed_model": None,
+    "failover_triggered": False,
+    "attempted_models": [],
+}
+
 
 def _is_key_configured(env_key: str) -> bool:
     val = (os.environ.get(env_key) or "").strip()
@@ -67,9 +88,6 @@ def _is_key_configured(env_key: str) -> bool:
 
 
 def list_available_models() -> List[Dict[str, Any]]:
-    """
-    Returns model metadata along with whether the corresponding API key is configured in .env.
-    """
     models_info = []
     for m in SUPPORTED_MODELS:
         configured = _is_key_configured(m["env_key"])
@@ -91,19 +109,128 @@ def get_model_meta(model_id: Optional[str]) -> Dict[str, str]:
     return SUPPORTED_MODELS[0]
 
 
-def generate_text(
+def build_model_failover_chain(requested_model_id: Optional[str] = "gemini-2.5-flash") -> List[str]:
+    """
+    Builds a deduplicated ordered list of callable model IDs starting with requested_model_id
+    (if its provider API key is configured), followed by configured fallback models.
+    Ensures at least a 2-model chain is present even in mock/test environments.
+    """
+    env_fallbacks_raw = os.environ.get("GATEKEEPER_MODEL_FALLBACKS", "").strip()
+    if env_fallbacks_raw:
+        custom_fallbacks = [m.strip() for m in env_fallbacks_raw.split(",") if m.strip()]
+    else:
+        custom_fallbacks = list(DEFAULT_FALLBACK_ORDER)
+
+    candidates = []
+    if requested_model_id:
+        candidates.append(requested_model_id)
+    candidates.extend(custom_fallbacks)
+
+    configured_chain: List[str] = []
+    seen = set()
+    for cid in candidates:
+        meta = get_model_meta(cid)
+        resolved_id = meta["id"]
+        if resolved_id in seen:
+            continue
+        seen.add(resolved_id)
+        if _is_key_configured(meta["env_key"]):
+            configured_chain.append(resolved_id)
+
+    if not configured_chain:
+        primary_id = get_model_meta(requested_model_id)["id"]
+        fallback_id = "gemini-2.5-pro" if primary_id == "gemini-2.5-flash" else "gemini-2.5-flash"
+        return [primary_id, fallback_id]
+
+    return configured_chain
+
+
+def is_retriable_model_error(error: Exception) -> bool:
+    """
+    Determines whether an exception from a model provider should trigger automatic failover
+    to the next model in the chain (HTTP 404, 408, 410, 429, 5xx, timeouts, or connection errors).
+    """
+    if isinstance(error, urllib.error.HTTPError):
+        if error.code in (404, 408, 410, 429) or error.code >= 500:
+            return True
+    if isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError)):
+        return True
+
+    status = getattr(error, "status", None) or getattr(error, "status_code", None) or getattr(error, "code", None)
+    if isinstance(status, int) and (status in (404, 408, 410, 429) or status >= 500):
+        return True
+
+    msg = str(error).lower()
+    retriable_tokens = (
+        "429",
+        "rate limit",
+        "quota",
+        "timeout",
+        "timed out",
+        "500",
+        "502",
+        "503",
+        "504",
+        "overloaded",
+        "unavailable",
+        "model_not_found",
+        "deprecated",
+        "not found",
+        "connection",
+    )
+    return any(tok in msg for tok in retriable_tokens)
+
+
+def get_last_routing_telemetry() -> Dict[str, Any]:
+    return dict(_last_routing_telemetry)
+
+
+def probe_model_chain_health(force: bool = False) -> Dict[str, Any]:
+    """
+    Returns a cached health and readiness snapshot of the multi-provider model failover chains.
+    """
+    global _model_health_cache, _model_health_timestamp
+    now = time.time()
+    if (
+        not force
+        and _model_health_cache is not None
+        and (now - _model_health_timestamp) < MODEL_HEALTH_TTL_SECONDS
+    ):
+        return _model_health_cache
+
+    models_status = list_available_models()
+    drafting_chain = build_model_failover_chain("gemini-2.5-flash")
+    evaluation_chain = build_model_failover_chain("gemini-2.5-pro")
+    configured_providers = sorted({m["provider"] for m in models_status if m["available"]})
+
+    snapshot: Dict[str, Any] = {
+        "status": "ready" if configured_providers else "unconfigured",
+        "configured_providers": configured_providers,
+        "drafting_chain": {
+            "active": drafting_chain[0] if drafting_chain else None,
+            "fallbacks_available": drafting_chain[1:],
+        },
+        "evaluation_chain": {
+            "active": evaluation_chain[0] if evaluation_chain else None,
+            "fallbacks_available": evaluation_chain[1:],
+        },
+        "models": models_status,
+        "last_routing": get_last_routing_telemetry(),
+        "checked_at_epoch": int(now),
+    }
+    _model_health_cache = snapshot
+    _model_health_timestamp = now
+    return snapshot
+
+
+def _invoke_single_model_text(
+    meta: Dict[str, str],
     system_instruction: str,
     user_prompt: str,
-    model_id: str = "gemini-2.5-flash",
-    temperature: float = 0.4,
+    temperature: float,
 ) -> str:
-    """
-    Adapter method to generate a draft or remediated text across Google Gemini,
-    Anthropic Claude, or OpenAI models. Falls back gracefully to Gemini if a secondary
-    provider key is not configured.
-    """
-    meta = get_model_meta(model_id)
     provider = meta["provider"]
+    model_id = meta["id"]
 
     if provider == "anthropic" and _is_key_configured("ANTHROPIC_API_KEY"):
         return _call_anthropic_text(
@@ -121,7 +248,6 @@ def generate_text(
             temperature=temperature,
         )
 
-    # Default to Google Gemini
     gemini_model = model_id if provider == "google" else "gemini-2.5-flash"
     if HAS_GOOGLE_GENAI_SDK:
         client = genai.Client(
@@ -146,18 +272,54 @@ def generate_text(
     )
 
 
-def generate_structured(
+def generate_text(
+    system_instruction: str,
+    user_prompt: str,
+    model_id: str = "gemini-2.5-flash",
+    temperature: float = 0.4,
+) -> str:
+    global _last_routing_telemetry
+    chain = build_model_failover_chain(model_id)
+    attempted: List[str] = []
+    last_error: Optional[Exception] = None
+
+    for idx, candidate_id in enumerate(chain):
+        meta = get_model_meta(candidate_id)
+        attempted.append(meta["id"])
+        try:
+            result = _invoke_single_model_text(
+                meta=meta,
+                system_instruction=system_instruction,
+                user_prompt=user_prompt,
+                temperature=temperature,
+            )
+            _last_routing_telemetry = {
+                "requested_model": model_id,
+                "executed_model": meta["id"],
+                "failover_triggered": idx > 0 or meta["id"] != model_id,
+                "attempted_models": attempted,
+            }
+            return result
+        except Exception as err:
+            last_error = err
+            has_more = idx < len(chain) - 1
+            if not (has_more and is_retriable_model_error(err)):
+                raise
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("No callable models available in failover chain.")
+
+
+def _invoke_single_model_structured(
+    meta: Dict[str, str],
     system_instruction: str,
     user_prompt: str,
     response_schema: Type[BaseModel],
-    model_id: str = "gemini-2.5-pro",
-    temperature: float = 0.1,
+    temperature: float,
 ) -> BaseModel:
-    """
-    Adapter method to generate strict Pydantic-validated JSON across supported providers.
-    """
-    meta = get_model_meta(model_id)
     provider = meta["provider"]
+    model_id = meta["id"]
 
     if provider == "anthropic" and _is_key_configured("ANTHROPIC_API_KEY"):
         schema_json = json.dumps(response_schema.model_json_schema(), indent=2)
@@ -190,7 +352,6 @@ def generate_structured(
         cleaned = _strip_markdown_fences(raw_text)
         return response_schema.model_validate_json(cleaned)
 
-    # Default to Google GenAI SDK with native response_schema
     gemini_model = model_id if provider == "google" else "gemini-2.5-pro"
     if HAS_GOOGLE_GENAI_SDK:
         client = genai.Client(
@@ -223,6 +384,47 @@ def generate_structured(
     )
     cleaned = _strip_markdown_fences(raw_text)
     return response_schema.model_validate_json(cleaned)
+
+
+def generate_structured(
+    system_instruction: str,
+    user_prompt: str,
+    response_schema: Type[BaseModel],
+    model_id: str = "gemini-2.5-pro",
+    temperature: float = 0.1,
+) -> BaseModel:
+    global _last_routing_telemetry
+    chain = build_model_failover_chain(model_id)
+    attempted: List[str] = []
+    last_error: Optional[Exception] = None
+
+    for idx, candidate_id in enumerate(chain):
+        meta = get_model_meta(candidate_id)
+        attempted.append(meta["id"])
+        try:
+            result = _invoke_single_model_structured(
+                meta=meta,
+                system_instruction=system_instruction,
+                user_prompt=user_prompt,
+                response_schema=response_schema,
+                temperature=temperature,
+            )
+            _last_routing_telemetry = {
+                "requested_model": model_id,
+                "executed_model": meta["id"],
+                "failover_triggered": idx > 0 or meta["id"] != model_id,
+                "attempted_models": attempted,
+            }
+            return result
+        except Exception as err:
+            last_error = err
+            has_more = idx < len(chain) - 1
+            if not (has_more and is_retriable_model_error(err)):
+                raise
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("No callable models available in structured failover chain.")
 
 
 def _strip_markdown_fences(text: str) -> str:

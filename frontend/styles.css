@@ -1183,3 +1183,39 @@ textarea {
 .hidden {
   display: none !important;
 }
+
+/* Model Router Failover Status Pill */
+.control-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.model-health-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.model-health-pill.health-ready {
+  border-color: var(--success-border);
+  background-color: rgba(16, 185, 129, 0.12);
+  color: var(--success-text);
+}
+
+.model-health-pill.health-failover {
+  border-color: var(--warning-border);
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.model-health-pill.health-warn {
+  border-color: var(--danger-border);
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+}

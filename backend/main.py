@@ -5,7 +5,6 @@ from typing import Any, Dict
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 # Load environment variables from .env at startup
@@ -108,28 +107,6 @@ def evaluate_pipeline_endpoint(request: PipelineRequest) -> PipelineResponse:
         ) from exc
 
 
-# Serve static frontend assets so the entire app runs with `uvicorn backend.main:app --reload`
-if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+# Mount the static frontend last after all /api routes are registered
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
-
-@app.get("/")
-def serve_index():
-    index_file = FRONTEND_DIR / "index.html"
-    if not index_file.exists():
-        raise HTTPException(status_code=404, detail="Frontend index.html not found.")
-    return FileResponse(str(index_file))
-
-
-@app.get("/{filename:path}")
-def serve_frontend_assets(filename: str):
-    """
-    Allows direct relative references such as /styles.css and /app.js from index.html.
-    """
-    candidate = (FRONTEND_DIR / filename).resolve()
-    if (
-        FRONTEND_DIR.resolve() in candidate.parents
-        and candidate.is_file()
-    ):
-        return FileResponse(str(candidate))
-    raise HTTPException(status_code=404, detail="Resource not found.")

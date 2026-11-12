@@ -1,5 +1,7 @@
 # Gatekeeper & Coach
 
+**Live demo:** [https://gatekeeper-and-coach-production.up.railway.app](https://gatekeeper-and-coach-production.up.railway.app)
+
 Gatekeeper & Coach is a compliance evaluation and prompt-diagnostics workbench for regulated professionals—specifically FINRA Rule 2210 wealth advisors and New York state and federal litigation attorneys—who use large language models to draft client communications and court filings from verified source records. It solves a single operational problem: when a practitioner's prompt pushes an LLM to promise returns, omit material risks, overstate disputed facts, or invent case citations, standard guardrails either silently rewrite the text or block it without explaining what in the prompt caused the violation, leaving the practitioner unable to audit the correction or avoid repeating the error.
 
 ## The problem
@@ -133,4 +135,4 @@ A broader labelled benchmark set is not yet checked into the repository. Planned
 
 ## Author
 
-Built by Jerome ([www.jwd.nyc.](http://www.jwd.nyc./)).
+Built by Jerome ([https://www.jwd.nyc](https://www.jwd.nyc)).
